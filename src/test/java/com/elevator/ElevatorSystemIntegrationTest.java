@@ -115,13 +115,30 @@ public class ElevatorSystemIntegrationTest {
         // 创建电梯
         Elevator elevator = elevatorService.createElevator(10);
 
-        // 创建多个请求
-        elevatorService.createRequest(2, 5);
-        elevatorService.createRequest(3, 8);
-        elevatorService.createRequest(1, 4);
+        // 创建多个请求并关联到电梯
+        Request request1 = new Request();
+        request1.setOriginFloor(2);
+        request1.setDestinationFloor(5);
+        request1.setDirection(Direction.UP);
+        request1.setElevator(elevator);
+        requestRepository.save(request1);
+
+        Request request2 = new Request();
+        request2.setOriginFloor(3);
+        request2.setDestinationFloor(8);
+        request2.setDirection(Direction.UP);
+        request2.setElevator(elevator);
+        requestRepository.save(request2);
+
+        Request request3 = new Request();
+        request3.setOriginFloor(1);
+        request3.setDestinationFloor(4);
+        request3.setDirection(Direction.UP);
+        request3.setElevator(elevator);
+        requestRepository.save(request3);
 
         // 处理所有请求
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
             elevatorService.processNextStep(elevator.getId());
         }
 

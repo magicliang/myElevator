@@ -18,59 +18,59 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class ElevatorService {
-    
+
     private final ElevatorRepository elevatorRepository;
     private final RequestRepository requestRepository;
-    
+
     @Transactional
     public Elevator createElevator(int maxCapacity) {
         Elevator elevator = new Elevator();
         elevator.setMaxCapacity(maxCapacity);
         return elevatorRepository.save(elevator);
     }
-    
+
     @Transactional
     public Request createRequest(int originFloor, int destinationFloor) {
         Request request = new Request();
         request.setOriginFloor(originFloor);
         request.setDestinationFloor(destinationFloor);
         request.setDirection(destinationFloor > originFloor ? Direction.UP : Direction.DOWN);
-        
+
         Elevator optimalElevator = findOptimalElevator(request);
         request.setElevator(optimalElevator);
-        
+
         return requestRepository.save(request);
     }
-    
+
     public Elevator findOptimalElevator(Request request) {
         List<Elevator> elevators = elevatorRepository.findAll();
-        
+
         return elevators.stream()
                 .min(Comparator.comparingInt(elevator -> calculateCost(elevator, request)))
                 .orElseThrow(() -> new RuntimeException("No elevators available"));
     }
-    
+
     private int calculateCost(Elevator elevator, Request request) {
         // 如果电梯已满，返回最大成本
         if (elevator.getCurrentLoad() >= elevator.getMaxCapacity()) {
             return Integer.MAX_VALUE;
         }
-        
+
         int currentFloor = elevator.getCurrentFloor();
         Direction currentDirection = elevator.getDirection();
         int requestFloor = request.getOriginFloor();
-        
+
         // 电梯空闲状态
         if (currentDirection == Direction.IDLE) {
             return Math.abs(currentFloor - requestFloor);
         }
-        
+
         // 同方向
         if ((currentDirection == Direction.UP && request.getDirection() == Direction.UP && requestFloor >= currentFloor) ||
             (currentDirection == Direction.DOWN && request.getDirection() == Direction.DOWN && requestFloor <= currentFloor)) {
             return Math.abs(currentFloor - requestFloor);
         }
-        
+
         // 反方向或需要绕行
         if (currentDirection == Direction.UP) {
             return (10 - currentFloor) + (10 - requestFloor); // 假设最高10层
@@ -78,110 +78,177 @@ public class ElevatorService {
             return (currentFloor - 1) + (requestFloor - 1); // 假设最低1层
         }
     }
-    
+
     @Transactional
     public void processNextStep(Long elevatorId) {
         Elevator elevator = elevatorRepository.findById(elevatorId)
                 .orElseThrow(() -> new RuntimeException("Elevator not found"));
-        
+
         List<Request> pendingRequests = requestRepository.findByElevatorIdAndCompletedFalse(elevatorId);
-        
+
         if (pendingRequests.isEmpty()) {
             elevator.setDirection(Direction.IDLE);
             elevator.setState(State.IDLE);
             elevatorRepository.save(elevator);
             return;
         }
-        
+
         // 使用LOOK算法处理请求
         processLookAlgorithm(elevator, pendingRequests);
     }
-    
+
     private void processLookAlgorithm(Elevator elevator, List<Request> requests) {
         int currentFloor = elevator.getCurrentFloor();
         Direction direction = elevator.getDirection();
-        
+
+        log.info("Processing LOOK algorithm - Elevator: {}, Current floor: {}, Direction: {}, Pending requests: {}",
+                 elevator.getId(), currentFloor, direction, requests.size());
+
         // 获取所有需要停靠的楼层
         Set<Integer> stops = new HashSet<>();
         for (Request request : requests) {
-            stops.add(request.getOriginFloor());
-            stops.add(request.getDestinationFloor());
+            log.info("Request {}: origin={}, dest={}, pickedUp={}, completed={}",
+                     request.getId(), request.getOriginFloor(), request.getDestinationFloor(),
+                     request.isPassengerPickedUp(), request.isCompleted());
+
+            // 只添加需要停靠的楼层
+            if (!request.isPassengerPickedUp()) {
+                stops.add(request.getOriginFloor());
+            }
+            if (request.isPassengerPickedUp() && !request.isCompleted()) {
+                stops.add(request.getDestinationFloor());
+            }
         }
-        
+
+        log.info("All stops: {}", stops);
+
         // 根据当前方向确定下一个停靠楼层
         Optional<Integer> nextStop = findNextStop(currentFloor, direction, stops);
-        
+
+        log.info("Next stop: {}", nextStop);
+
         if (nextStop.isPresent()) {
             int targetFloor = nextStop.get();
-            
+
+            // 如果方向是IDLE，根据目标楼层设置方向
+            if (direction == Direction.IDLE && targetFloor != currentFloor) {
+                direction = targetFloor > currentFloor ? Direction.UP : Direction.DOWN;
+                elevator.setDirection(direction);
+                log.info("Setting initial direction to: {}", direction);
+            }
+
             if (targetFloor == currentFloor) {
                 // 到达目标楼层
+                log.info("Arrived at target floor: {}", currentFloor);
                 elevator.setState(State.STOPPED);
                 openDoor(elevator);
                 handleFloorArrival(elevator, currentFloor);
             } else {
                 // 移动电梯
+                log.info("Moving elevator from {} to {}", currentFloor, targetFloor);
                 elevator.setState(State.MOVING);
                 elevator.setDirection(targetFloor > currentFloor ? Direction.UP : Direction.DOWN);
                 elevator.setCurrentFloor(targetFloor);
             }
         } else {
-            // 没有同方向的请求，改变方向
-            elevator.setDirection(direction == Direction.UP ? Direction.DOWN : Direction.UP);
+            // 没有停靠点，设置为空闲
+            log.info("No stops available, setting to IDLE");
+            elevator.setDirection(Direction.IDLE);
+            elevator.setState(State.IDLE);
         }
-        
+
         elevatorRepository.save(elevator);
     }
-    
+
     private Optional<Integer> findNextStop(int currentFloor, Direction direction, Set<Integer> stops) {
+        log.info("Finding next stop - currentFloor: {}, direction: {}, stops: {}", currentFloor, direction, stops);
+
+        if (stops.isEmpty()) {
+            log.info("No stops available");
+            return Optional.empty();
+        }
+
+        // 如果方向是IDLE，选择最近的请求
+        if (direction == Direction.IDLE) {
+            Optional<Integer> nearest = stops.stream()
+                    .min(Comparator.comparingInt(floor -> Math.abs(floor - currentFloor)));
+            log.info("Direction is IDLE, choosing nearest stop: {}", nearest);
+            return nearest;
+        }
+
         if (direction == Direction.UP) {
-            return stops.stream()
+            Optional<Integer> next = stops.stream()
                     .filter(floor -> floor >= currentFloor)
                     .min(Integer::compareTo);
+            if (next.isPresent()) {
+                log.info("Next stop UP: {}", next);
+                return next;
+            } else {
+                // 没有向上的停靠点，改变方向
+                Optional<Integer> downNext = stops.stream()
+                        .filter(floor -> floor <= currentFloor)
+                        .max(Integer::compareTo);
+                log.info("No more UP stops, changing to DOWN: {}", downNext);
+                return downNext;
+            }
         } else if (direction == Direction.DOWN) {
-            return stops.stream()
+            Optional<Integer> next = stops.stream()
                     .filter(floor -> floor <= currentFloor)
                     .max(Integer::compareTo);
+            if (next.isPresent()) {
+                log.info("Next stop DOWN: {}", next);
+                return next;
+            } else {
+                // 没有向下的停靠点，改变方向
+                Optional<Integer> upNext = stops.stream()
+                        .filter(floor -> floor >= currentFloor)
+                        .min(Integer::compareTo);
+                log.info("No more DOWN stops, changing to UP: {}", upNext);
+                return upNext;
+            }
         }
+
+        log.info("No valid direction, returning empty");
         return Optional.empty();
     }
-    
+
     private void openDoor(Elevator elevator) {
         elevator.setState(State.DOOR_OPEN);
         log.info("Elevator {} door opened at floor {}", elevator.getId(), elevator.getCurrentFloor());
     }
-    
+
     private void handleFloorArrival(Elevator elevator, int floor) {
         List<Request> requests = requestRepository.findByElevatorIdAndCompletedFalse(elevator.getId());
-        
+
         // 处理到达该楼层的请求
         for (Request request : requests) {
-            if (request.getOriginFloor() == floor && !request.isCompleted()) {
+            if (request.getOriginFloor() == floor && !request.isPassengerPickedUp()) {
                 log.info("Passenger picked up at floor {} by elevator {}", floor, elevator.getId());
+                request.setPassengerPickedUp(true);
                 elevator.setCurrentLoad(elevator.getCurrentLoad() + 1);
             }
-            
-            if (request.getDestinationFloor() == floor && !request.isCompleted()) {
+
+            if (request.getDestinationFloor() == floor && request.isPassengerPickedUp() && !request.isCompleted()) {
                 log.info("Passenger dropped off at floor {} by elevator {}", floor, elevator.getId());
                 request.setCompleted(true);
                 request.setCompletedAt(new Date());
                 elevator.setCurrentLoad(Math.max(0, elevator.getCurrentLoad() - 1));
             }
         }
-        
+
         requestRepository.saveAll(requests);
         elevatorRepository.save(elevator);
     }
-    
+
     public List<Elevator> getAllElevators() {
         return elevatorRepository.findAll();
     }
-    
+
     public Elevator getElevator(Long id) {
         return elevatorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Elevator not found"));
     }
-    
+
     public List<Request> getPendingRequests(Long elevatorId) {
         return requestRepository.findByElevatorIdAndCompletedFalse(elevatorId);
     }
