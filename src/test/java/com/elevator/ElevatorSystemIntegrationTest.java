@@ -291,10 +291,19 @@ public class ElevatorSystemIntegrationTest {
         // 验证方向正确
         assertEquals(Direction.DOWN, request.getDirection());
 
-        // 处理请求
-        elevatorService.processNextStep(elevator.getId());
-        elevator = elevatorService.getElevator(elevator.getId());
+        // 处理请求 - 需要多次step才能从8楼到3楼并完成
+        for (int i = 0; i < 15; i++) {
+            elevatorService.processNextStep(elevator.getId());
+            elevator = elevatorService.getElevator(elevator.getId());
 
+            // 检查请求是否已完成
+            List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+            if (pendingRequests.isEmpty()) {
+                break;
+            }
+        }
+
+        // 验证电梯到达3楼
         assertEquals(3, elevator.getCurrentFloor());
 
         // 验证请求已完成
