@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.Date;
 
@@ -36,10 +37,6 @@ public class Request {
 
     @ManyToOne
     @JoinColumn(name = "elevator_id")
+    @JsonIgnore
     private Elevator elevator;
-
-    @PrePersist
-    protected void onCreate() {
-        createdAt = new Date();
-    }
 }
