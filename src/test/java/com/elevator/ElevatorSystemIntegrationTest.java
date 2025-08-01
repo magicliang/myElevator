@@ -68,9 +68,9 @@ public class ElevatorSystemIntegrationTest {
 
         // 创建请求
         given()
-            .contentType(ContentType.JSON)
-            .param("originFloor", 3)
-            .param("destinationFloor", 7)
+            .contentType(ContentType.URLENC)  // 修改为表单编码类型
+            .formParam("originFloor", 3)      // 使用formParam传递参数
+            .formParam("destinationFloor", 7) // 使用formParam传递参数
         .when()
             .post("/api/elevators/" + elevator.getId() + "/requests")
         .then()
@@ -94,13 +94,13 @@ public class ElevatorSystemIntegrationTest {
         assertEquals(1, elevator.getCurrentFloor());
         assertEquals(Direction.IDLE, elevator.getDirection());
 
-        // 处理第一步：移动到3楼
+        // 处理：移动到3楼接载
         elevatorService.processNextStep(elevator.getId());
         elevator = elevatorService.getElevator(elevator.getId());
         assertEquals(3, elevator.getCurrentFloor());
         assertEquals(Direction.UP, elevator.getDirection());
 
-        // 处理后续步骤：移动到7楼
+        // 处理：移动到7楼送达
         elevatorService.processNextStep(elevator.getId());
         elevator = elevatorService.getElevator(elevator.getId());
         assertEquals(7, elevator.getCurrentFloor());

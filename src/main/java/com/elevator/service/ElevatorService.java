@@ -132,16 +132,19 @@ public class ElevatorService {
                      request.getId(), request.getOriginFloor(), request.getDestinationFloor(),
                      request.isPassengerPickedUp(), request.isCompleted());
 
-            // 只添加需要停靠的楼层
-            if (!request.isPassengerPickedUp()) {
-                stops.add(request.getOriginFloor());
-            }
-            if (request.isPassengerPickedUp() && !request.isCompleted()) {
-                stops.add(request.getDestinationFloor());
+            // 优化停靠点收集逻辑：确保正确处理已接客和未接客的情况
+            if (!request.isCompleted()) {
+                if (request.isPassengerPickedUp()) {
+                    // 乘客已在电梯上，添加目的地楼层
+                    stops.add(request.getDestinationFloor());
+                } else {
+                    // 乘客还未上电梯，添加起始楼层
+                    stops.add(request.getOriginFloor());
+                }
             }
         }
 
-        log.info("All stops: {}", stops);
+        log.info("All stops after optimization: {}", stops);
 
         // 根据当前方向确定下一个停靠楼层
         Optional<Integer> nextStop = findNextStop(currentFloor, direction, stops);
