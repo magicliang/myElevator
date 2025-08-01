@@ -17,6 +17,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
+import java.util.Set;
 
 import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
@@ -221,5 +222,138 @@ public class ElevatorSystemIntegrationTest {
         .then()
             .statusCode(200)
             .body("size()", equalTo(2));
+    }
+
+    @Test
+    public void testSameFloorRequest() {
+        // 测试同楼层请求
+        Elevator elevator = elevatorService.createElevator(10);
+        Request request = elevatorService.createRequest(5, 5);
+
+        // 处理请求
+        elevatorService.processNextStep(elevator.getId());
+
+        // 验证请求已完成
+        List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+        assertTrue(pendingRequests.isEmpty());
+    }
+
+    @Test
+    public void testEmptyElevatorSelection() {
+        // 测试没有电梯时的处理
+        elevatorRepository.deleteAll();
+
+        // 应该抛出异常
+        assertThrows(RuntimeException.class, () -> {
+            elevatorService.createRequest(3, 7);
+        });
+    }
+
+    @Test
+    public void testFullElevatorHandling() {
+        // 创建满电梯
+        Elevator elevator1 = elevatorService.createElevator(1);
+        elevator1.setCurrentLoad(1);
+        elevatorRepository.save(elevator1);
+
+        // 创建有空位的电梯
+        Elevator elevator2 = elevatorService.createElevator(10);
+
+        // 创建请求，应该分配给有空位的电梯
+        Request request = elevatorService.createRequest(3, 7);
+
+        assertEquals(elevator2.getId(), request.getElevator().getId());
+    }
+
+    @Test
+    public void testDownDirectionRequest() {
+        // 测试向下请求
+        Elevator elevator = elevatorService.createElevator(10);
+        elevator.setCurrentFloor(8);
+        elevatorRepository.save(elevator);
+
+        Request request = elevatorService.createRequest(8, 3);
+
+        // 验证方向正确
+        assertEquals(Direction.DOWN, request.getDirection());
+
+        // 处理请求
+        elevatorService.processNextStep(elevator.getId());
+        elevator = elevatorService.getElevator(elevator.getId());
+
+        assertEquals(3, elevator.getCurrentFloor());
+
+        // 验证请求已完成
+        List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+        assertTrue(pendingRequests.isEmpty());
+    }
+
+    @Test
+    public void testConcurrentRequests() {
+        // 测试并发请求处理
+        Elevator elevator = elevatorService.createElevator(10);
+
+        // 创建多个并发请求
+        Request request1 = elevatorService.createRequest(2, 5);
+        Request request2 = elevatorService.createRequest(3, 7);
+        Request request3 = elevatorService.createRequest(1, 4);
+
+        // 验证所有请求都分配给同一个电梯
+        assertEquals(elevator.getId(), request1.getElevator().getId());
+        assertEquals(elevator.getId(), request2.getElevator().getId());
+        assertEquals(elevator.getId(), request3.getElevator().getId());
+
+        // 验证停靠点集合包含所有起始楼层
+        Set<Integer> stops = elevator.getStops();
+        assertTrue(stops.contains(1));
+        assertTrue(stops.contains(2));
+        assertTrue(stops.contains(3));
+    }
+
+    @Test
+    public void testElevatorStateTransitions() {
+        // 测试电梯状态转换
+        Elevator elevator = elevatorService.createElevator(10);
+
+        // 初始状态
+        assertEquals(State.IDLE, elevator.getState());
+        assertEquals(Direction.IDLE, elevator.getDirection());
+
+        // 创建请求
+        elevatorService.createRequest(5, 8);
+
+        // 第一次step：开始移动
+        elevatorService.processNextStep(elevator.getId());
+        elevator = elevatorService.getElevator(elevator.getId());
+        assertEquals(State.MOVING, elevator.getState());
+        assertEquals(Direction.UP, elevator.getDirection());
+
+        // 继续处理直到到达
+        for (int i = 0; i < 10; i++) {
+            elevatorService.processNextStep(elevator.getId());
+        }
+
+        // 验证最终状态
+        elevator = elevatorService.getElevator(elevator.getId());
+        assertEquals(State.IDLE, elevator.getState());
+        assertEquals(Direction.IDLE, elevator.getDirection());
+    }
+
+    @Test
+    public void testEdgeCaseFloorLimits() {
+        // 测试边界楼层
+        Elevator elevator = elevatorService.createElevator(10);
+
+        // 测试最低楼层
+        Request request1 = elevatorService.createRequest(1, 2);
+        elevatorService.processNextStep(elevator.getId());
+        elevator = elevatorService.getElevator(elevator.getId());
+        assertEquals(1, elevator.getCurrentFloor());
+
+        // 测试最高楼层（假设系统支持到10层）
+        Request request2 = elevatorService.createRequest(10, 9);
+        elevatorService.processNextStep(elevator.getId());
+        elevator = elevatorService.getElevator(elevator.getId());
+        assertEquals(10, elevator.getCurrentFloor());
     }
 }
