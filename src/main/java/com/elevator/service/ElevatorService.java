@@ -39,6 +39,10 @@ public class ElevatorService {
         Elevator optimalElevator = findOptimalElevator(request);
         request.setElevator(optimalElevator);
 
+        // 将起始楼层添加到电梯的停靠点集合
+        optimalElevator.getStops().add(originFloor);
+        elevatorRepository.save(optimalElevator); // 保存电梯的停靠点更新
+
         return requestRepository.save(request);
     }
 
@@ -125,26 +129,9 @@ public class ElevatorService {
         log.info("Processing LOOK algorithm - Elevator: {}, Current floor: {}, Direction: {}, Pending requests: {}",
                  elevator.getId(), currentFloor, direction, requests.size());
 
-        // 获取所有需要停靠的楼层
-        Set<Integer> stops = new HashSet<>();
-        for (Request request : requests) {
-            log.info("Request {}: origin={}, dest={}, pickedUp={}, completed={}",
-                     request.getId(), request.getOriginFloor(), request.getDestinationFloor(),
-                     request.isPassengerPickedUp(), request.isCompleted());
-
-            // 优化停靠点收集逻辑：确保正确处理已接客和未接客的情况
-            if (!request.isCompleted()) {
-                if (request.isPassengerPickedUp()) {
-                    // 乘客已在电梯上，添加目的地楼层
-                    stops.add(request.getDestinationFloor());
-                } else {
-                    // 乘客还未上电梯，添加起始楼层
-                    stops.add(request.getOriginFloor());
-                }
-            }
-        }
-
-        log.info("All stops after optimization: {}", stops);
+        // 直接使用电梯的停靠点集合
+        Set<Integer> stops = new HashSet<>(elevator.getStops());
+        log.info("All stops from elevator: {}", stops);
 
         // 根据当前方向确定下一个停靠楼层
         Optional<Integer> nextStop = findNextStop(currentFloor, direction, stops);
@@ -250,6 +237,10 @@ public class ElevatorService {
                 log.info("Passenger picked up at floor {} by elevator {}", floor, elevator.getId());
                 request.setPassengerPickedUp(true);
                 elevator.setCurrentLoad(elevator.getCurrentLoad() + 1);
+
+                // 关键修复：乘客接上后立即将目的地楼层添加到停靠点
+                elevator.getStops().add(request.getDestinationFloor());
+                log.info("Added destination floor {} to stops after pickup", request.getDestinationFloor());
             }
 
             if (request.getDestinationFloor() == floor && request.isPassengerPickedUp() && !request.isCompleted()) {

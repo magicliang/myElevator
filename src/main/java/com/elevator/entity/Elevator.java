@@ -3,8 +3,7 @@ package com.elevator.entity;
 import com.elevator.model.Direction;
 import com.elevator.model.State;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.ToString;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -13,8 +12,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "elevators")
-@Getter
-@Setter
+@Data
 @ToString(exclude = "requests")
 public class Elevator {
     @Id
@@ -30,6 +28,10 @@ public class Elevator {
 
     @Enumerated(EnumType.STRING)
     private State state = State.IDLE;
+
+    // 新增停靠点集合
+    @ElementCollection
+    private Set<Integer> stops = new HashSet<>();
 
     @OneToMany(mappedBy = "elevator", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore

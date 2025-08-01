@@ -122,6 +122,8 @@ public class ElevatorSystemIntegrationTest {
         request1.setDirection(Direction.UP);
         request1.setElevator(elevator);
         requestRepository.save(request1);
+        // 添加起始楼层到停靠点
+        elevator.getStops().add(request1.getOriginFloor());
 
         Request request2 = new Request();
         request2.setOriginFloor(3);
@@ -129,6 +131,8 @@ public class ElevatorSystemIntegrationTest {
         request2.setDirection(Direction.UP);
         request2.setElevator(elevator);
         requestRepository.save(request2);
+        // 添加起始楼层到停靠点
+        elevator.getStops().add(request2.getOriginFloor());
 
         Request request3 = new Request();
         request3.setOriginFloor(1);
@@ -136,6 +140,11 @@ public class ElevatorSystemIntegrationTest {
         request3.setDirection(Direction.UP);
         request3.setElevator(elevator);
         requestRepository.save(request3);
+        // 添加起始楼层到停靠点
+        elevator.getStops().add(request3.getOriginFloor());
+
+        // 保存电梯更新
+        elevatorRepository.save(elevator);
 
         // 处理所有请求
         for (int i = 0; i < 20; i++) {
