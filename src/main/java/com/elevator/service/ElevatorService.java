@@ -45,14 +45,24 @@ public class ElevatorService {
     public Elevator findOptimalElevator(Request request) {
         List<Elevator> elevators = elevatorRepository.findAll();
 
-        return elevators.stream()
+        log.info("Finding optimal elevator for request: origin={}, dest={}",
+                 request.getOriginFloor(), request.getDestinationFloor());
+
+        Elevator selected = elevators.stream()
                 .min(Comparator.comparingInt(elevator -> calculateCost(elevator, request)))
                 .orElseThrow(() -> new RuntimeException("No elevators available"));
+
+        log.info("Selected elevator: id={}, currentFloor={}, cost={}",
+                 selected.getId(), selected.getCurrentFloor(),
+                 calculateCost(selected, request));
+
+        return selected;
     }
 
     private int calculateCost(Elevator elevator, Request request) {
         // 如果电梯已满，返回最大成本
         if (elevator.getCurrentLoad() >= elevator.getMaxCapacity()) {
+            log.info("Elevator {} is full, cost=MAX", elevator.getId());
             return Integer.MAX_VALUE;
         }
 
@@ -60,23 +70,34 @@ public class ElevatorService {
         Direction currentDirection = elevator.getDirection();
         int requestFloor = request.getOriginFloor();
 
+        log.info("Calculating cost - elevator: {}, currentFloor: {}, direction: {}, requestFloor: {}",
+                 elevator.getId(), currentFloor, currentDirection, requestFloor);
+
         // 电梯空闲状态
         if (currentDirection == Direction.IDLE) {
-            return Math.abs(currentFloor - requestFloor);
+            int cost = Math.abs(currentFloor - requestFloor);
+            log.info("IDLE state, cost: {}", cost);
+            return cost;
         }
 
         // 同方向
         if ((currentDirection == Direction.UP && request.getDirection() == Direction.UP && requestFloor >= currentFloor) ||
             (currentDirection == Direction.DOWN && request.getDirection() == Direction.DOWN && requestFloor <= currentFloor)) {
-            return Math.abs(currentFloor - requestFloor);
+            int cost = Math.abs(currentFloor - requestFloor);
+            log.info("Same direction, cost: {}", cost);
+            return cost;
         }
 
         // 反方向或需要绕行
+        int cost;
         if (currentDirection == Direction.UP) {
-            return (10 - currentFloor) + (10 - requestFloor); // 假设最高10层
+            cost = (10 - currentFloor) + (10 - requestFloor); // 假设最高10层
+            log.info("UP direction, need to turn around, cost: {}", cost);
         } else {
-            return (currentFloor - 1) + (requestFloor - 1); // 假设最低1层
+            cost = (currentFloor - 1) + (requestFloor - 1); // 假设最低1层
+            log.info("DOWN direction, need to turn around, cost: {}", cost);
         }
+        return cost;
     }
 
     @Transactional

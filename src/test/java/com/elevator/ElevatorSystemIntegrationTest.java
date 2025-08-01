@@ -149,20 +149,20 @@ public class ElevatorSystemIntegrationTest {
 
     @Test
     public void testOptimalElevatorSelection() {
-        // 创建两个电梯
+        // 创建两个电梯并设置楼层
         Elevator elevator1 = elevatorService.createElevator(10);
         elevator1.setCurrentFloor(1);
-        elevatorRepository.save(elevator1);
+        elevator1 = elevatorRepository.save(elevator1);
 
         Elevator elevator2 = elevatorService.createElevator(10);
         elevator2.setCurrentFloor(8);
-        elevatorRepository.save(elevator2);
+        elevator2 = elevatorRepository.save(elevator2);
 
         // 创建从5楼出发的请求
         Request request = elevatorService.createRequest(5, 10);
 
-        // 验证选择了更近的电梯（elevator1在1楼，比elevator2在8楼更近5楼）
-        assertEquals(elevator1.getId(), request.getElevator().getId());
+        // 验证选择了更近的电梯（elevator2在8楼，比elevator1在1楼更近5楼）
+        assertEquals(elevator2.getId(), request.getElevator().getId());
     }
 
     @Test
