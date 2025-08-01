@@ -39,7 +39,7 @@ public class ElevatorService {
         Elevator optimalElevator = findOptimalElevator(request);
         request.setElevator(optimalElevator);
 
-        // 将起始楼层添加到电梯的停靠点集合
+        // 关键修复：始终将起始楼层添加到电梯的停靠点集合，无论电梯当前在哪个楼层
         optimalElevator.getStops().add(originFloor);
         elevatorRepository.save(optimalElevator); // 保存电梯的停靠点更新
 
@@ -246,9 +246,18 @@ public class ElevatorService {
                 request.setPassengerPickedUp(true);
                 elevator.setCurrentLoad(elevator.getCurrentLoad() + 1);
 
-                // 关键修复：乘客接上后立即将目的地楼层添加到停靠点
-                elevator.getStops().add(request.getDestinationFloor());
-                log.info("Added destination floor {} to stops after pickup", request.getDestinationFloor());
+                // 关键修复：只有当目的地不同时才添加到停靠点
+                if (request.getOriginFloor() != request.getDestinationFloor()) {
+                    elevator.getStops().add(request.getDestinationFloor());
+                    log.info("Added destination floor {} to stops after pickup", request.getDestinationFloor());
+                } else {
+                    // 同楼层请求，立即完成
+                    log.info("Same floor request, marking as completed: {} -> {}",
+                             request.getOriginFloor(), request.getDestinationFloor());
+                    request.setCompleted(true);
+                    request.setCompletedAt(new Date());
+                    elevator.setCurrentLoad(Math.max(0, elevator.getCurrentLoad() - 1));
+                }
             }
 
             if (request.getDestinationFloor() == floor && request.isPassengerPickedUp() && !request.isCompleted()) {
@@ -259,7 +268,7 @@ public class ElevatorService {
             }
         }
 
-        // 关键修复：从停靠点集合中移除已处理的当前楼层
+        // 从停靠点集合中移除已处理的当前楼层
         elevator.getStops().remove(floor);
         log.info("Removed floor {} from stops after processing", floor);
 

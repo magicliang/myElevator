@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.util.List;
 import java.util.Set;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 public class ElevatorSystemIntegrationTest {
 
     @LocalServerPort
@@ -42,6 +44,7 @@ public class ElevatorSystemIntegrationTest {
     @BeforeEach
     public void setUp() {
         RestAssured.port = port;
+        // 手动清理数据而不是依赖事务回滚
         elevatorRepository.deleteAll();
         requestRepository.deleteAll();
     }
@@ -69,9 +72,9 @@ public class ElevatorSystemIntegrationTest {
 
         // 创建请求
         given()
-            .contentType(ContentType.URLENC)  // 修改为表单编码类型
-            .formParam("originFloor", 3)      // 使用formParam传递参数
-            .formParam("destinationFloor", 7) // 使用formParam传递参数
+            .contentType(ContentType.URLENC)
+            .formParam("originFloor", 3)
+            .formParam("destinationFloor", 7)
         .when()
             .post("/api/elevators/" + elevator.getId() + "/requests")
         .then()
@@ -180,18 +183,17 @@ public class ElevatorSystemIntegrationTest {
 
     @Test
     public void testElevatorCapacity() {
-        // 创建小容量电梯
-        Elevator elevator = elevatorService.createElevator(1);
-        elevator.setCurrentLoad(1);
-        elevatorRepository.save(elevator);
+        // 创建满电梯
+        Elevator elevator1 = elevatorService.createElevator(1);
+        elevator1.setCurrentLoad(1);
+        elevatorRepository.save(elevator1);
 
-        // 创建另一个电梯
+        // 创建有空位的电梯
         Elevator elevator2 = elevatorService.createElevator(10);
 
         // 创建请求，应该分配给有空位的电梯
         Request request = elevatorService.createRequest(3, 7);
 
-        // 验证选择了有空位的电梯
         assertEquals(elevator2.getId(), request.getElevator().getId());
     }
 
@@ -230,12 +232,24 @@ public class ElevatorSystemIntegrationTest {
         Elevator elevator = elevatorService.createElevator(10);
         Request request = elevatorService.createRequest(5, 5);
 
-        // 处理请求
-        elevatorService.processNextStep(elevator.getId());
+        // 处理请求 - 需要多次step才能从1楼到5楼并完成
+        for (int i = 0; i < 15; i++) {
+            elevatorService.processNextStep(elevator.getId());
+            elevator = elevatorService.getElevator(elevator.getId());
+
+            // 检查请求是否已完成
+            List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+            if (pendingRequests.isEmpty()) {
+                break;
+            }
+        }
+
+        // 验证电梯到达5楼
+        assertEquals(5, elevator.getCurrentFloor());
 
         // 验证请求已完成
         List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
-        assertTrue(pendingRequests.isEmpty());
+        assertTrue(pendingRequests.isEmpty(), "Same floor request should be completed after reaching the floor");
     }
 
     @Test
@@ -305,9 +319,12 @@ public class ElevatorSystemIntegrationTest {
 
         // 验证停靠点集合包含所有起始楼层
         Set<Integer> stops = elevator.getStops();
-        assertTrue(stops.contains(1));
-        assertTrue(stops.contains(2));
-        assertTrue(stops.contains(3));
+        assertTrue(stops.contains(1), "Should contain floor 1");
+        assertTrue(stops.contains(2), "Should contain floor 2");
+        assertTrue(stops.contains(3), "Should contain floor 3");
+
+        // 验证停靠点数量（可能有重复，所以使用>=）
+        assertTrue(stops.size() >= 3, "Should have at least 3 stops");
     }
 
     @Test
