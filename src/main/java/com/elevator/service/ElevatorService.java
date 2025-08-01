@@ -154,6 +154,14 @@ public class ElevatorService {
                 elevator.setState(State.STOPPED);
                 openDoor(elevator);
                 handleFloorArrival(elevator, currentFloor);
+
+                // 关键修复：处理完当前楼层后，如果有剩余停靠点，继续处理
+                if (!elevator.getStops().isEmpty()) {
+                    log.info("Still have stops remaining: {}, continuing processing", elevator.getStops());
+                    // 递归调用继续处理下一个停靠点
+                    processLookAlgorithm(elevator, requests);
+                    return;
+                }
             } else {
                 // 移动电梯
                 log.info("Moving elevator from {} to {}", currentFloor, targetFloor);
@@ -250,6 +258,10 @@ public class ElevatorService {
                 elevator.setCurrentLoad(Math.max(0, elevator.getCurrentLoad() - 1));
             }
         }
+
+        // 关键修复：从停靠点集合中移除已处理的当前楼层
+        elevator.getStops().remove(floor);
+        log.info("Removed floor {} from stops after processing", floor);
 
         requestRepository.saveAll(requests);
         elevatorRepository.save(elevator);

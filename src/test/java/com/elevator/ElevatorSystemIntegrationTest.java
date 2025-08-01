@@ -105,6 +105,9 @@ public class ElevatorSystemIntegrationTest {
         elevator = elevatorService.getElevator(elevator.getId());
         assertEquals(7, elevator.getCurrentFloor());
 
+        // 处理：完成下车逻辑
+        elevatorService.processNextStep(elevator.getId());
+
         // 验证请求已完成
         List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
         assertTrue(pendingRequests.isEmpty());
