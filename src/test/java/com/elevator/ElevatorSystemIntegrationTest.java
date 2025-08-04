@@ -14,8 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
@@ -312,6 +313,7 @@ public class ElevatorSystemIntegrationTest {
     }
 
     @Test
+    @Transactional
     public void testConcurrentRequests() {
         // 测试并发请求处理
         Elevator elevator = elevatorService.createElevator(10);
@@ -321,6 +323,9 @@ public class ElevatorSystemIntegrationTest {
         Request request2 = elevatorService.createRequest(3, 7);
         Request request3 = elevatorService.createRequest(1, 4);
 
+        // 重新获取电梯对象以获取最新状态
+        elevator = elevatorService.getElevator(elevator.getId());
+
         // 验证所有请求都分配给同一个电梯
         assertEquals(elevator.getId(), request1.getElevator().getId());
         assertEquals(elevator.getId(), request2.getElevator().getId());
@@ -328,12 +333,12 @@ public class ElevatorSystemIntegrationTest {
 
         // 验证停靠点集合包含所有起始楼层
         Set<Integer> stops = elevator.getStops();
-        assertTrue(stops.contains(1), "Should contain floor 1");
-        assertTrue(stops.contains(2), "Should contain floor 2");
-        assertTrue(stops.contains(3), "Should contain floor 3");
+        assertTrue(stops.contains(1), "Should contain floor 1, actual stops: " + stops);
+        assertTrue(stops.contains(2), "Should contain floor 2, actual stops: " + stops);
+        assertTrue(stops.contains(3), "Should contain floor 3, actual stops: " + stops);
 
-        // 验证停靠点数量（可能有重复，所以使用>=）
-        assertTrue(stops.size() >= 3, "Should have at least 3 stops");
+        // 验证停靠点数量（Set会自动去重，所以应该正好3个）
+        assertEquals(3, stops.size(), "Should have exactly 3 unique stops: " + stops);
     }
 
     @Test
@@ -370,16 +375,46 @@ public class ElevatorSystemIntegrationTest {
         // 测试边界楼层
         Elevator elevator = elevatorService.createElevator(10);
 
-        // 测试最低楼层
+        // 测试最低楼层（1楼到2楼）
         Request request1 = elevatorService.createRequest(1, 2);
-        elevatorService.processNextStep(elevator.getId());
-        elevator = elevatorService.getElevator(elevator.getId());
-        assertEquals(1, elevator.getCurrentFloor());
 
-        // 测试最高楼层（假设系统支持到10层）
+        // 处理请求直到完成
+        for (int i = 0; i < 10; i++) {
+            elevatorService.processNextStep(elevator.getId());
+            elevator = elevatorService.getElevator(elevator.getId());
+
+            // 检查请求是否已完成
+            List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+            if (pendingRequests.isEmpty()) {
+                break;
+            }
+        }
+
+        // 验证电梯最终到达2楼
+        assertEquals(2, elevator.getCurrentFloor());
+
+        // 重置电梯位置到10楼，测试最高楼层
+        elevator.setCurrentFloor(10);
+        elevator.setDirection(Direction.IDLE);
+        elevator.setState(State.IDLE);
+        elevator = elevatorRepository.save(elevator);
+
+        // 测试最高楼层（10楼到9楼）
         Request request2 = elevatorService.createRequest(10, 9);
-        elevatorService.processNextStep(elevator.getId());
-        elevator = elevatorService.getElevator(elevator.getId());
-        assertEquals(10, elevator.getCurrentFloor());
+
+        // 处理请求直到完成
+        for (int i = 0; i < 10; i++) {
+            elevatorService.processNextStep(elevator.getId());
+            elevator = elevatorService.getElevator(elevator.getId());
+
+            // 检查请求是否已完成
+            List<Request> pendingRequests = elevatorService.getPendingRequests(elevator.getId());
+            if (pendingRequests.isEmpty()) {
+                break;
+            }
+        }
+
+        // 验证电梯最终到达9楼
+        assertEquals(9, elevator.getCurrentFloor());
     }
 }
