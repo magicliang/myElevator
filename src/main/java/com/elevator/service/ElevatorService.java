@@ -80,7 +80,10 @@ public class ElevatorService {
         // 电梯空闲状态
         if (currentDirection == Direction.IDLE) {
             int cost = Math.abs(currentFloor - requestFloor);
-            log.info("IDLE state, cost: {}", cost);
+            // 添加负载均衡因子
+            int pendingRequests = requestRepository.findByElevatorIdAndCompletedFalse(elevator.getId()).size();
+            cost += pendingRequests * 2; // 每个待处理请求增加2的成本
+            log.info("IDLE state, cost: {}, pending requests: {}", cost, pendingRequests);
             return cost;
         }
 

@@ -4,6 +4,7 @@ import com.elevator.entity.Elevator;
 import com.elevator.entity.Request;
 import com.elevator.service.ElevatorService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,5 +51,10 @@ public class ElevatorController {
     @GetMapping("/{elevatorId}/requests")
     public ResponseEntity<List<Request>> getPendingRequests(@PathVariable Long elevatorId) {
         return ResponseEntity.ok(elevatorService.getPendingRequests(elevatorId));
+    }
+    
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<String> handleRuntimeException(RuntimeException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
     }
 }

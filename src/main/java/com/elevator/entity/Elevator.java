@@ -2,7 +2,7 @@ package com.elevator.entity;
 
 import com.elevator.model.Direction;
 import com.elevator.model.State;
-import jakarta.persistence.*;
+import javax.persistence.*;
 import lombok.Data;
 import lombok.ToString;
 import com.fasterxml.jackson.annotation.JsonIgnore;

@@ -144,7 +144,7 @@ class ElevatorServiceTest {
         // Given
         when(elevatorRepository.findAll()).thenReturn(Collections.singletonList(testElevator));
         when(elevatorRepository.save(any(Elevator.class))).thenReturn(testElevator);
-        when(requestRepository.save(any(Request.class))).thenReturn(testRequest);
+        when(requestRepository.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When - UP direction
         Request upRequest = elevatorService.createRequest(3, 7);

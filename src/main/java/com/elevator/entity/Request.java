@@ -1,7 +1,7 @@
 package com.elevator.entity;
 
 import com.elevator.model.Direction;
-import jakarta.persistence.*;
+import javax.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
