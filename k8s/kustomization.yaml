@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: elevator-system
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+- servicemonitor.yaml
+
+images:
+- name: elevator-system
+  newTag: latest
+
+commonLabels:
+  app: elevator-system
+  version: v1.0.0

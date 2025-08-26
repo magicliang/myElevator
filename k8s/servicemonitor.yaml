@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: elevator-metrics
+  namespace: elevator-system
+  labels:
+    app: elevator-system
+spec:
+  selector:
+    matchLabels:
+      app: elevator-system
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
